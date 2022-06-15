@@ -266,6 +266,43 @@ RCT_EXPORT_METHOD(copyToCloud:(NSDictionary *)options
     }
 }
 
+RCT_EXPORT_METHOD(downloadFromCloud:(NSDictionary *)options
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+
+
+    NSString *destinationPath = [options objectForKey:@"targetPath"];
+    NSString *scope = [options objectForKey:@"scope"];
+    bool documentsFolder = !scope || [scope caseInsensitiveCompare:@"visible"] == NSOrderedSame;
+
+
+    NSString * destPath = destinationPath;
+    while ([destPath hasPrefix:@"/"]) {
+        destPath = [destPath substringFromIndex:1];
+    }
+
+    RCTLogTrace(@"Downloading file: %@", destPath);
+
+    NSFileManager* fileManager = [NSFileManager defaultManager];
+
+    NSURL *ubiquityURL = documentsFolder ? [self icloudDocumentsDirectory] : [self icloudDirectory];
+
+    if (ubiquityURL) {
+
+        NSURL* targetFile = [ubiquityURL URLByAppendingPathComponent:destPath];
+
+        NSError *error;
+        [fileManager startDownloadingUbiquitousItemAtURL:targetFile error:&error];
+        if(error) {
+            return reject(@"error", error.description, nil);
+        }
+
+        return resolve(targetFile.path);
+    } else {
+        return reject(@"error", [NSString stringWithFormat:@"could not download '%@' from iCloud drive", destPath], nil);
+    }
+}
+
 - (void) moveToICloudDirectory:(bool) documentsFolder :(NSString *)tempFile :(NSString *)destinationPath
                               :(RCTPromiseResolveBlock)resolver
                               :(RCTPromiseRejectBlock)rejecter {
