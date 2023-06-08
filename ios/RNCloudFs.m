@@ -67,6 +67,66 @@ RCT_EXPORT_METHOD(fileExists:(NSDictionary *)options
     }
 }
 
+RCT_EXPORT_METHOD(fileExistsInCloud:(NSDictionary *)options
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+
+    NSString *destinationPath = [options objectForKey:@"targetPath"];
+    NSString *scope = [options objectForKey:@"scope"];
+    bool documentsFolder = !scope || [scope caseInsensitiveCompare:@"visible"] == NSOrderedSame;
+
+    NSURL *ubiquityURL = documentsFolder ? [self icloudDocumentsDirectory] : [self icloudDirectory];
+
+    if (!ubiquityURL) {
+       RCTLogTrace(@"Could not retrieve a ubiquityURL");
+       return reject(@"error", [NSString stringWithFormat:@"could access iCloud drive '%@'", destinationPath], nil);
+    }
+
+    NSURL* fileURL = [ubiquityURL URLByAppendingPathComponent:destinationPath];
+    
+    
+    NSError *error;
+    NSNumber *isUbiquitous;
+    NSString *uploadingStatus = nil;
+    NSString *uploadedStatus = nil;
+    NSString *downloadingStatus = nil;
+    
+    [fileURL getResourceValue:&uploadingStatus forKey:NSURLUbiquitousItemIsUploadingKey error:&error];
+    if (error) {
+       RCTLogTrace(@"Error checking iCloud uploading status: %@", error);
+       return reject(@"error", [NSString stringWithFormat:@"Error checking iCloud uploading status: %@", error.localizedDescription], nil);
+    }
+    
+    [fileURL getResourceValue:&uploadedStatus forKey:NSURLUbiquitousItemIsUploadedKey error:&error];
+    if (error) {
+       RCTLogTrace(@"Error checking iCloud uploaded status: %@", error);
+       return reject(@"error", [NSString stringWithFormat:@"Error checking iCloud uploaded status: %@", error.localizedDescription], nil);
+    }
+    
+    
+    
+    [fileURL getResourceValue:&downloadingStatus forKey:NSURLUbiquitousItemDownloadingStatusKey error:&error];
+    if (error) {
+       RCTLogTrace(@"Error checking iCloud downloading status: %@", error);
+       return reject(@"error", [NSString stringWithFormat:@"Error checking iCloud downloading status: %@", error.localizedDescription], nil);
+    }
+    
+    [fileURL getResourceValue:&isUbiquitous forKey:NSURLIsUbiquitousItemKey error:&error];
+    if (error) {
+        RCTLogTrace(@"Error checking iCloud isUbiquitous: %@", error);
+        return reject(@"error", [NSString stringWithFormat:@"Error checking iCloud isUbiquitous: %@", error.localizedDescription], nil);
+    }
+    
+    NSDictionary *dictRes = @{
+                    @"isUbiquitous":isUbiquitous,
+                    @"uploadingStatus":uploadingStatus,
+                    @"uploadedStatus":uploadedStatus,
+                    @"downloadingStatus":downloadingStatus
+                    };
+                    
+    return resolve(dictRes);
+}
+
 RCT_EXPORT_METHOD(getFilePath:(NSDictionary *)options
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
@@ -352,14 +412,19 @@ RCT_EXPORT_METHOD(downloadFromCloud:(NSDictionary *)options
         }
 
         NSError *error;
-        [fileManager setUbiquitous:YES itemAtURL:[NSURL fileURLWithPath:tempFile] destinationURL:uniqueFile error:&error];
+        bool uploaded = [fileManager setUbiquitous:YES itemAtURL:[NSURL fileURLWithPath:tempFile] destinationURL:uniqueFile error:&error];
         if(error) {
             return rejecter(@"error", error.description, nil);
         }
 
         [fileManager removeItemAtPath:tempFile error:&error];
 
-        return resolver(uniqueFile.path);
+        NSDictionary *dictRes = @{
+                    @"filePath":uniqueFile.path,
+                    @"uploadedStatus":uploaded,
+                    };
+                    
+        return resolver(dictRes);
     } else {
         NSError *error;
         [fileManager removeItemAtPath:tempFile error:&error];
