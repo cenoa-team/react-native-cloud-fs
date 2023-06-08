@@ -6,10 +6,10 @@
 #else
   #import "RCTBridgeModule.h"
 #endif
-#import "RCTEventDispatcher.h"
-#import "RCTUtils.h"
+#import <React/RCTEventDispatcher.h>
+#import <React/RCTUtils.h>
 #import <AssetsLibrary/AssetsLibrary.h>
-#import "RCTLog.h"
+#import <React/RCTLog.h>
 
 @implementation RNCloudFs
 
