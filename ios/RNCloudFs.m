@@ -370,8 +370,56 @@ RCT_EXPORT_METHOD(downloadFromCloud:(NSDictionary *)options
         if(error) {
             return reject(@"error", error.description, nil);
         }
+        
+        NSString *normalFileName = [destPath stringByReplacingOccurrencesOfString:@".icloud" withString:@""];
+        normalFileName = [normalFileName substringFromIndex:1];
+        
+        RCTLogTrace(@">>> normalized file name %@", normalFileName);
+        
+        NSURL* downloadedFile = [ubiquityURL URLByAppendingPathComponent:normalFileName];
 
-        return resolve(targetFile.path);
+        // Create a dispatch timer
+        // wait for the file to be downloaded
+        // check the download status every 1 second
+        // if the file hasn't been downloaded in 5 seconds, reject the promise
+        __block int count = 0;
+        dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+        dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC, 0.1 * NSEC_PER_SEC);
+        dispatch_source_set_event_handler(timer, ^{
+            count++;
+
+            // if the file hasn't been downloaded in 5 seconds, reject the promise
+            if (count > 5) {
+                RCTLogTrace(@">>> File hasn't been downloaded in 5 seconds %@", downloadedFile);
+                dispatch_source_cancel(timer);
+                return resolve(downloadedFile.path);
+            }
+
+            NSError *error;
+            id resourceValue = nil;
+
+            [downloadedFile getPromisedItemResourceValue:&resourceValue
+                                                forKey:NSURLUbiquitousItemDownloadingStatusKey
+                                                error:&error];
+            if (error == nil) {
+                NSString *downloadingStatus = (NSString *)resourceValue;
+                if ([downloadingStatus isEqualToString:NSURLUbiquitousItemDownloadingStatusCurrent]) {
+                    RCTLogTrace(@">>> File has been downloaded");
+
+                    dispatch_source_cancel(timer);
+                    return resolve(downloadedFile.path);
+                } else if ([downloadingStatus isEqualToString:NSURLUbiquitousItemDownloadingStatusDownloaded]) {
+                    RCTLogTrace(@">>> File is downloaded");
+                } else if ([downloadingStatus isEqualToString:NSURLUbiquitousItemDownloadingStatusNotDownloaded]) {
+                    RCTLogTrace(@">>> File has not been downloaded");
+                } else {
+                    RCTLogTrace(@">>> unknown %@", downloadingStatus);
+                }
+            } else {
+                RCTLogTrace(@"Error checking download status: %@", error);
+            }
+            });
+        dispatch_resume(timer);
     } else {
         return reject(@"error", [NSString stringWithFormat:@"could not download '%@' from iCloud drive", destPath], nil);
     }
