@@ -381,7 +381,7 @@ RCT_EXPORT_METHOD(downloadFromCloud:(NSDictionary *)options
         // Create a dispatch timer
         // wait for the file to be downloaded
         // check the download status every 1 second
-        // if the file hasn't been downloaded in 5 seconds, resolve  he promise as downloading started
+        // if the file hasn't been downloaded in 5 seconds, resolve promise as downloading started
         __block int count = 0;
         dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
         dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC, 0.1 * NSEC_PER_SEC);
